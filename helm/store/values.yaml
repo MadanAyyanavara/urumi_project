@@ -1,0 +1,36 @@
+store:
+  id: ""
+  namespace: ""
+
+engine:
+  type: woocommerce # or medusa
+
+domain:
+  host: ""
+
+resources:
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+  requests:
+    cpu: "200m"
+    memory: "256Mi"
+
+db:
+  image: mariadb:10.6
+  name: wordpress
+  user: wpuser
+  # password properties should be set via --set or external secrets in production
+  persistence:
+    enabled: true
+    size: 1Gi
+  storageSize: 1Gi # Deprecated, use persistence.size
+
+app:
+  image: wordpress:6.4-apache
+  # medusa image will be set conditionally in templates
+
+agentSidecar:
+  enabled: false
+  image: alpine:latest
+  command: ["/bin/sh", "-c", "while true; do sleep 3600; done"]

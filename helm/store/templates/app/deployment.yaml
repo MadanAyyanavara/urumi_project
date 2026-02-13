@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: store-app
+  namespace: {{ .Values.store.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: store-app
+  template:
+    metadata:
+      labels:
+        app: store-app
+    spec:
+      containers:
+      {{- if eq .Values.engine.type "woocommerce" }}
+        - name: wordpress
+          image: {{ .Values.app.image }}
+          env:
+            - name: WORDPRESS_DB_HOST
+              value: store-db:3306
+            - name: WORDPRESS_DB_NAME
+              value: {{ .Values.db.name }}
+            - name: WORDPRESS_DB_USER
+              value: {{ .Values.db.user }}
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: store-secrets
+                  key: db-password
+          ports:
+            - containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /wp-login.php
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /wp-login.php
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 5
+      {{- else if eq .Values.engine.type "medusa" }}
+        # Medusa Stub as per Scope Note (implementing WooCommerce fully)
+        - name: medusa-stub
+          image: nginx:alpine
+          # In a real implementation, this would be the Medusa backend + Storefront
+          command: ["/bin/sh", "-c"]
+          args:
+            - echo "<h1>Medusa Store Stub (Not Fully Implemented)</h1>" > /usr/share/nginx/html/index.html && nginx -g "daemon off;"
+          ports:
+            - containerPort: 80
+      {{- end }}
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
+      
+      {{- if .Values.agentSidecar.enabled }}
+        - name: agent-sidecar
+          image: {{ .Values.agentSidecar.image }}
+          command: {{ .Values.agentSidecar.command }}
+          # In Round 2, you would mount shared volumes here (e.g. /var/www/html)
+          # so the agent can modify code directly.
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+      {{- end }}

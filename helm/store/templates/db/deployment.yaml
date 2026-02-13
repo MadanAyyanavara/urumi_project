@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: store-db
+  namespace: {{ required "store.namespace is required" .Values.store.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: store-db
+  template:
+    metadata:
+      labels:
+        app: store-db
+    spec:
+      containers:
+        {{- if eq .Values.engine.type "woocommerce" }}
+        - name: mariadb
+          image: mariadb:10.6
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_DATABASE
+              value: {{ .Values.db.name }}
+            - name: MYSQL_USER
+              value: {{ .Values.db.user }}
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: store-secrets
+                  key: db-password
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: store-secrets
+                  key: db-root-password
+          livenessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+          volumeMounts:
+            - mountPath: /var/lib/mysql
+              name: db-store
+        {{- else if eq .Values.engine.type "medusa" }}
+        - name: postgres
+          image: postgres:15
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.db.name }}
+            - name: POSTGRES_USER
+              value: {{ .Values.db.user }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: store-secrets
+                  key: db-password
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-h", "localhost"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-h", "localhost"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: db-store
+        {{- end }}
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
+      volumes:
+        - name: db-store
+          persistentVolumeClaim:
+            claimName: store-db-pvc

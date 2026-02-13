@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: store-app
+  namespace: {{ .Values.store.namespace }}
+spec:
+  selector:
+    app: store-app
+  ports:
+    - port: 80
+      targetPort: 80

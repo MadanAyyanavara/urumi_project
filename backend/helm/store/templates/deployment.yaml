@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.store.id }}
+  namespace: {{ .Values.store.namespace }}
+  labels:
+    app: {{ .Values.store.id }}
+    engine: {{ .Values.engine.type }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.store.id }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.store.id }}
+    spec:
+      containers:
+        # MAIN APP CONTAINER
+        - name: app
+          {{- if eq .Values.engine.type "woocommerce" }}
+          image: "{{ .Values.image.woocommerce.repository }}:{{ .Values.image.woocommerce.tag }}"
+          env:
+            - name: WORDPRESS_DB_HOST
+              value: "127.0.0.1" # Using sidecar DB pattern for simplicity in this demo, or loopback if using separate pod
+            - name: WORDPRESS_DB_USER
+              value: "root"
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.store.id }}-secrets
+                  key: db-root-password
+            - name: WORDPRESS_DB_NAME
+              value: "wordpress"
+          ports:
+            - containerPort: 80
+          {{- else if eq .Values.engine.type "medusa" }}
+          image: "{{ .Values.image.medusa.repository }}:{{ .Values.image.medusa.tag }}"
+          env:
+            - name: DATABASE_URL
+              value: "postgres://postgres:$(DB_PASSWORD)@127.0.0.1:5432/medusa"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.store.id }}-secrets
+                  key: db-password
+          ports:
+            - containerPort: 9000
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/www/html # WP default
+              # Medusa path would vary, keeping simple for demo
+
+        # DATABASE SIDECAR (Simplified Architecture for Demo)
+        # Running DB in same pod to avoid creating 2 deployments per store for this MVP
+        - name: database
+          {{- if eq .Values.engine.type "woocommerce" }}
+          image: mysql:5.7
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.store.id }}-secrets
+                  key: db-root-password
+            - name: MYSQL_DATABASE
+              value: wordpress
+          ports:
+            - containerPort: 3306
+          {{- else if eq .Values.engine.type "medusa" }}
+          image: postgres:13
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.store.id }}-secrets
+                  key: db-password
+            - name: POSTGRES_DB
+              value: medusa
+          ports:
+            - containerPort: 5432
+          {{- end }}
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/mysql # MySQL default
+              # /var/lib/postgresql/data # PG default
+
+        # OPTIONAL AI AGENT SIDECAR
+        {{- if .Values.agentSidecar.enabled }}
+        - name: ai-agent-sidecar
+          image: {{ .Values.agentSidecar.image }}
+          command: {{ toYaml .Values.agentSidecar.command | nindent 12 }}
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+        {{- end }}
+
+      volumes:
+        - name: data
+          emptyDir: {} # Ephemeral for app code in this demo
+        - name: db-data
+          persistentVolumeClaim:
+            claimName: {{ .Values.store.id }}-pvc

@@ -1,0 +1,61 @@
+# Default values for store-chart.
+# This is a YAML-formatted file.
+
+store:
+  id: "default-store"
+  namespace: "default"
+
+engine:
+  type: "woocommerce" # or "medusa"
+
+image:
+  woocommerce:
+    repository: wordpress
+    tag: latest
+    pullPolicy: IfNotPresent
+  medusa:
+    repository: medusajs/medusa-starter-default
+    tag: latest
+    pullPolicy: IfNotPresent
+  sidecar:
+    repository: alpine
+    tag: latest # mock sidecar for now
+    pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: "nginx" # standard for kind/minikube/k3s
+  annotations: {}
+  # kubernetes.io/ingress.class: nginx
+  # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: store.localtest.me
+      paths:
+        - path: /
+          pathType: Prefix
+
+db:
+  password: "changeme"
+  rootPassword: "changeme"
+  persistence:
+    enabled: true
+    storageClass: "standard" # "local-path" for k3s, "standard" for kind/docker
+    accessMode: ReadWriteOnce
+    size: 2Gi
+
+agentSidecar:
+  enabled: false
+  image: "python:3.9-slim"
+  command: ["/bin/sh", "-c", "while true; do echo 'AI Agent performing catalog optimization...'; sleep 30; done"]
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi

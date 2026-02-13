@@ -1,0 +1,16 @@
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+
+db:
+  persistence:
+    storageClass: gp2 # AWS example, or local-path for k3s
+    size: 10Gi
+  image: mariadb:10.11 # Pin specific stable version
+
+app:
+  imagePullPolicy: Always
